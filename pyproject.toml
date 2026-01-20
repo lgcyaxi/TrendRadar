@@ -12,18 +12,135 @@ dependencies = [
     "feedparser>=6.0.0,<7.0.0",
     "boto3>=1.35.0,<2.0.0",
     "litellm>=1.57.0,<2.0.0",
+    "loguru>=0.7.0,<1.0.0",
 ]
 
 [project.scripts]
 trendradar = "trendradar.__main__:main"
 trendradar-mcp = "mcp_server.server:run_server"
 
+[project.entry-points."trendradar.extensions"]
+# Extension plugins are auto-discovered via entry points
+# Format: plugin_name = "extensions.plugin_module:PluginClass"
+# Example:
+report_dedupe = "extensions.report_dedupe:ReportDedupePlugin"
+notification_scheduler = "extensions.notification_scheduler:NotificationSchedulerPlugin"
+wework_compact = "extensions.wework_compact:WeWorkCompactPlugin"
+
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["trendradar", "mcp_server"]
+packages = ["trendradar", "mcp_server", "extensions"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.dependencies]
+pyclean = ">=3.4.0,<4"
+loguru = ">=0.7.3,<0.8"
+pytest = ">=9.0.2,<10"
+
+[tool.pixi.activation.env]
+# Default environment variables when pixi environment is activated
+# These can be overridden when running specific tasks or manually
+CRAWLER_INTERVAL = "1800"  # Crawler loop interval in seconds (default: 30 minutes)
+RUN_MODE = "loop"          # Default run mode for crawler-server task
+
+[tool.pixi.pypi-dependencies]
+trendradar = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tool.pixi.tasks]
+# Build Docker image for Synology NAS (amd64 architecture) - Main Crawler
+build-nas = """
+cd docker && \
+VER=$(cat ../version) && \
+docker buildx build --platform linux/amd64 --load \
+  -t docker-trendradar:$VER \
+  -f Dockerfile .. && \
+docker save docker-trendradar:$VER -o build/trendradar-$VER.tar
+"""
+
+# Build Docker image for Synology NAS - MCP Server
+build-nas-mcp = """
+cd docker && \
+VER=$(cat ../version_mcp) && \
+docker buildx build --platform linux/amd64 --load \
+  -t docker-trendradar-mcp:$VER \
+  -f Dockerfile.mcp .. && \
+docker save docker-trendradar-mcp:$VER -o build/trendradar-mcp-$VER.tar
+"""
+
+# Run crawler in loop mode (controlled by RUN_MODE env var)
+# - RUN_MODE=single: Run once then exit (default)
+# - RUN_MODE=loop: Continuous loop (controlled by CRAWLER_INTERVAL)
+crawler = "RUN_MODE=single python -m trendradar"
+
+# Explicit loop mode (same as setting RUN_MODE=loop)
+crawler-server = "RUN_MODE=loop python -m trendradar"
+
+# Run TrendRadar MCP server (continuous service)
+mcp = "python -c 'from mcp_server.server import run_server; run_server()'"
+
+# 
+# Version Bump Tasks
+# 
+
+# Bump main version (patch) - e.g., 5.0.0 -> 5.0.1
+version-bump-patch = """
+python -c "
+ver = open('version').read().strip()
+major, minor, patch = map(int, ver.split('.'))
+patch += 1
+open('version', 'w').write(f'{major}.{minor}.{patch}\\n')
+print(f'Version bumped: {ver} -> {major}.{minor}.{patch}')
+"
+"""
+
+# Bump main version (minor) - e.g., 5.0.0 -> 5.1.0
+version-bump-minor = """
+python -c "
+ver = open('version').read().strip()
+major, minor, patch = map(int, ver.split('.'))
+minor += 1
+patch = 0
+open('version', 'w').write(f'{major}.{minor}.{patch}\\n')
+print(f'Version bumped: {ver} -> {major}.{minor}.{patch}')
+"
+"""
+
+# Bump main version (major) - e.g., 5.0.0 -> 6.0.0
+version-bump-major = """
+python -c "
+ver = open('version').read().strip()
+major, minor, patch = map(int, ver.split('.'))
+major += 1
+minor = 0
+patch = 0
+open('version', 'w').write(f'{major}.{minor}.{patch}\\n')
+print(f'Version bumped: {ver} -> {major}.{minor}.{patch}')
+"
+"""
+
+# Bump MCP version (patch style) - e.g., 3.1.5 -> 3.1.6
+version-bump-mcp = """
+python -c "
+ver = open('version_mcp').read().strip()
+major, minor, patch = map(int, ver.split('.'))
+patch += 1
+open('version_mcp', 'w').write(f'{major}.{minor}.{patch}\\n')
+print(f'MCP Version bumped: {ver} -> {major}.{minor}.{patch}')
+"
+"""

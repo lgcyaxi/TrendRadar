@@ -2,7 +2,11 @@
 数据解析服务
 
 v2.0.0: 仅支持 SQLite 数据库，移除 TXT 文件支持
-新存储结构：output/{type}/{date}.db
+v2.1.0: 支持滚动窗口存储模式 (current.db + archive.db)
+
+存储结构：
+- 传统模式：output/{type}/{date}.db
+- 滚动窗口模式：output/{type}/current.db + output/{type}/archive.db
 """
 
 import re
@@ -34,6 +38,25 @@ class ParserService:
             self.project_root = Path(project_root)
 
         self.cache = get_cache()
+        self._rolling_window_cache = {}  # 缓存滚动窗口检测结果
+
+    def _is_rolling_window_mode(self, db_type: str = "news") -> bool:
+        """
+        检测是否使用滚动窗口存储模式
+
+        Args:
+            db_type: 数据库类型 ("news" 或 "rss")
+
+        Returns:
+            True 如果使用滚动窗口模式
+        """
+        if db_type in self._rolling_window_cache:
+            return self._rolling_window_cache[db_type]
+
+        current_db = self.project_root / "output" / db_type / "current.db"
+        is_rolling = current_db.exists()
+        self._rolling_window_cache[db_type] = is_rolling
+        return is_rolling
 
     @staticmethod
     def clean_title(title: str) -> str:
@@ -56,11 +79,44 @@ class ParserService:
             date = datetime.now()
         return date.strftime("%Y-%m-%d")
 
+    def _get_db_paths(self, date: datetime = None, db_type: str = "news") -> List[Path]:
+        """
+        获取数据库文件路径列表
+
+        支持两种模式：
+        - 滚动窗口模式：返回 [current.db, archive.db]（如果存在）
+        - 传统模式：返回 [date.db]
+
+        Args:
+            date: 日期对象，默认为今天
+            db_type: 数据库类型 ("news" 或 "rss")
+
+        Returns:
+            数据库文件路径列表
+        """
+        db_dir = self.project_root / "output" / db_type
+        paths = []
+
+        if self._is_rolling_window_mode(db_type):
+            # 滚动窗口模式：优先 current.db，然后 archive.db
+            current_db = db_dir / "current.db"
+            archive_db = db_dir / "archive.db"
+            if current_db.exists():
+                paths.append(current_db)
+            if archive_db.exists():
+                paths.append(archive_db)
+        else:
+            # 传统模式：按日期查找
+            date_str = self.get_date_folder_name(date)
+            db_path = db_dir / f"{date_str}.db"
+            if db_path.exists():
+                paths.append(db_path)
+
+        return paths
+
     def _get_db_path(self, date: datetime = None, db_type: str = "news") -> Optional[Path]:
         """
-        获取数据库文件路径
-
-        新结构：output/{type}/{date}.db
+        获取数据库文件路径（兼容旧接口）
 
         Args:
             date: 日期对象，默认为今天
@@ -69,11 +125,8 @@ class ParserService:
         Returns:
             数据库文件路径，如果不存在则返回 None
         """
-        date_str = self.get_date_folder_name(date)
-        db_path = self.project_root / "output" / db_type / f"{date_str}.db"
-        if db_path.exists():
-            return db_path
-        return None
+        paths = self._get_db_paths(date, db_type)
+        return paths[0] if paths else None
 
     def _read_from_sqlite(
         self,
@@ -84,6 +137,10 @@ class ParserService:
         """
         从 SQLite 数据库读取数据
 
+        支持滚动窗口模式：
+        - 从 current.db 和 archive.db 读取数据
+        - 通过 crawl_date 列过滤指定日期的数据
+
         Args:
             date: 日期对象，默认为今天
             platform_ids: 平台ID列表，None表示所有平台
@@ -92,30 +149,45 @@ class ParserService:
         Returns:
             (all_titles, id_to_name, all_timestamps) 元组，如果数据库不存在返回 None
         """
-        db_path = self._get_db_path(date, db_type)
-        if db_path is None:
+        db_paths = self._get_db_paths(date, db_type)
+        if not db_paths:
             return None
 
         all_titles = {}
         id_to_name = {}
         all_timestamps = {}
 
-        try:
-            conn = sqlite3.connect(str(db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+        # 滚动窗口模式需要按日期过滤
+        date_filter = None
+        if self._is_rolling_window_mode(db_type) and date is not None:
+            date_filter = self.get_date_folder_name(date)
 
-            if db_type == "news":
-                return self._read_news_from_sqlite(cursor, platform_ids, all_titles, id_to_name, all_timestamps)
-            elif db_type == "rss":
-                return self._read_rss_from_sqlite(cursor, platform_ids, all_titles, id_to_name, all_timestamps)
+        # 从所有数据库读取数据
+        for db_path in db_paths:
+            try:
+                conn = sqlite3.connect(str(db_path))
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
 
-        except Exception as e:
-            print(f"Warning: 从 SQLite 读取数据失败: {e}")
-            return None
-        finally:
-            if 'conn' in locals():
+                if db_type == "news":
+                    result = self._read_news_from_sqlite(
+                        cursor, platform_ids, all_titles, id_to_name, all_timestamps, date_filter
+                    )
+                elif db_type == "rss":
+                    result = self._read_rss_from_sqlite(
+                        cursor, platform_ids, all_titles, id_to_name, all_timestamps, date_filter
+                    )
+
                 conn.close()
+
+            except Exception as e:
+                print(f"Warning: 从 SQLite 读取数据失败 ({db_path.name}): {e}")
+                continue
+
+        if not all_titles:
+            return None
+
+        return (all_titles, id_to_name, all_timestamps)
 
     def _read_news_from_sqlite(
         self,
@@ -123,7 +195,8 @@ class ParserService:
         platform_ids: Optional[List[str]],
         all_titles: Dict,
         id_to_name: Dict,
-        all_timestamps: Dict
+        all_timestamps: Dict,
+        date_filter: Optional[str] = None
     ) -> Optional[Tuple[Dict, Dict, Dict]]:
         """从热榜数据库读取数据"""
         # 检查表是否存在
@@ -134,26 +207,35 @@ class ParserService:
         if not cursor.fetchone():
             return None
 
-        # 构建查询
+        # 检查是否有 crawl_date 列（滚动窗口模式）
+        cursor.execute("PRAGMA table_info(news_items)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_crawl_date = "crawl_date" in columns
+
+        # 构建查询条件
+        conditions = []
+        params = []
+
         if platform_ids:
             placeholders = ','.join(['?' for _ in platform_ids])
-            query = f"""
-                SELECT n.id, n.platform_id, p.name as platform_name, n.title,
-                       n.rank, n.url, n.mobile_url,
-                       n.first_crawl_time, n.last_crawl_time, n.crawl_count
-                FROM news_items n
-                LEFT JOIN platforms p ON n.platform_id = p.id
-                WHERE n.platform_id IN ({placeholders})
-            """
-            cursor.execute(query, platform_ids)
-        else:
-            cursor.execute("""
-                SELECT n.id, n.platform_id, p.name as platform_name, n.title,
-                       n.rank, n.url, n.mobile_url,
-                       n.first_crawl_time, n.last_crawl_time, n.crawl_count
-                FROM news_items n
-                LEFT JOIN platforms p ON n.platform_id = p.id
-            """)
+            conditions.append(f"n.platform_id IN ({placeholders})")
+            params.extend(platform_ids)
+
+        if date_filter and has_crawl_date:
+            conditions.append("n.crawl_date = ?")
+            params.append(date_filter)
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        query = f"""
+            SELECT n.id, n.platform_id, p.name as platform_name, n.title,
+                   n.rank, n.url, n.mobile_url,
+                   n.first_crawl_time, n.last_crawl_time, n.crawl_count
+            FROM news_items n
+            LEFT JOIN platforms p ON n.platform_id = p.id
+            {where_clause}
+        """
+        cursor.execute(query, params)
 
         rows = cursor.fetchall()
 
@@ -224,7 +306,8 @@ class ParserService:
         feed_ids: Optional[List[str]],
         all_items: Dict,
         id_to_name: Dict,
-        all_timestamps: Dict
+        all_timestamps: Dict,
+        date_filter: Optional[str] = None
     ) -> Optional[Tuple[Dict, Dict, Dict]]:
         """从 RSS 数据库读取数据"""
         # 检查表是否存在
@@ -235,28 +318,36 @@ class ParserService:
         if not cursor.fetchone():
             return None
 
-        # 构建查询
+        # 检查是否有 crawl_date 列（滚动窗口模式）
+        cursor.execute("PRAGMA table_info(rss_items)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_crawl_date = "crawl_date" in columns
+
+        # 构建查询条件
+        conditions = []
+        params = []
+
         if feed_ids:
             placeholders = ','.join(['?' for _ in feed_ids])
-            query = f"""
-                SELECT i.id, i.feed_id, f.name as feed_name, i.title,
-                       i.url, i.published_at, i.summary, i.author,
-                       i.first_crawl_time, i.last_crawl_time, i.crawl_count
-                FROM rss_items i
-                LEFT JOIN rss_feeds f ON i.feed_id = f.id
-                WHERE i.feed_id IN ({placeholders})
-                ORDER BY i.published_at DESC
-            """
-            cursor.execute(query, feed_ids)
-        else:
-            cursor.execute("""
-                SELECT i.id, i.feed_id, f.name as feed_name, i.title,
-                       i.url, i.published_at, i.summary, i.author,
-                       i.first_crawl_time, i.last_crawl_time, i.crawl_count
-                FROM rss_items i
-                LEFT JOIN rss_feeds f ON i.feed_id = f.id
-                ORDER BY i.published_at DESC
-            """)
+            conditions.append(f"i.feed_id IN ({placeholders})")
+            params.extend(feed_ids)
+
+        if date_filter and has_crawl_date:
+            conditions.append("i.crawl_date = ?")
+            params.append(date_filter)
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        query = f"""
+            SELECT i.id, i.feed_id, f.name as feed_name, i.title,
+                   i.url, i.published_at, i.summary, i.author,
+                   i.first_crawl_time, i.last_crawl_time, i.crawl_count
+            FROM rss_items i
+            LEFT JOIN rss_feeds f ON i.feed_id = f.id
+            {where_clause}
+            ORDER BY i.published_at DESC
+        """
+        cursor.execute(query, params)
 
         rows = cursor.fetchall()
 
@@ -412,6 +503,10 @@ class ParserService:
         """
         获取可用的日期列表
 
+        支持两种模式：
+        - 滚动窗口模式：从数据库查询 distinct crawl_date
+        - 传统模式：扫描日期命名的 .db 文件
+
         Args:
             db_type: 数据库类型 ("news" 或 "rss")
 
@@ -422,11 +517,41 @@ class ParserService:
         if not db_dir.exists():
             return []
 
-        dates = []
-        for db_file in db_dir.glob("*.db"):
-            date_match = re.match(r'(\d{4}-\d{2}-\d{2})\.db$', db_file.name)
-            if date_match:
-                dates.append(date_match.group(1))
+        dates = set()
+
+        if self._is_rolling_window_mode(db_type):
+            # 滚动窗口模式：从数据库查询 distinct crawl_date
+            table_name = "news_items" if db_type == "news" else "rss_items"
+
+            for db_name in ["current.db", "archive.db"]:
+                db_path = db_dir / db_name
+                if not db_path.exists():
+                    continue
+
+                try:
+                    conn = sqlite3.connect(str(db_path))
+                    cursor = conn.cursor()
+
+                    # 检查是否有 crawl_date 列
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    columns = [col[1] for col in cursor.fetchall()]
+
+                    if "crawl_date" in columns:
+                        cursor.execute(f"SELECT DISTINCT crawl_date FROM {table_name} WHERE crawl_date IS NOT NULL")
+                        for row in cursor.fetchall():
+                            if row[0]:
+                                dates.add(row[0])
+
+                    conn.close()
+                except Exception as e:
+                    print(f"Warning: 查询可用日期失败 ({db_name}): {e}")
+                    continue
+        else:
+            # 传统模式：扫描日期命名的 .db 文件
+            for db_file in db_dir.glob("*.db"):
+                date_match = re.match(r'(\d{4}-\d{2}-\d{2})\.db$', db_file.name)
+                if date_match:
+                    dates.add(date_match.group(1))
 
         return sorted(dates, reverse=True)
 

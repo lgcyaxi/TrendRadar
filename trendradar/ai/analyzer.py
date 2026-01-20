@@ -420,6 +420,23 @@ class AIAnalyzer:
             if not json_str:
                 raise ValueError("提取的 JSON 内容为空")
 
+            # Fix unescaped control characters in JSON string values
+            # AI responses often contain literal newlines inside JSON strings
+            def fix_json_control_chars(s: str) -> str:
+                """Escape control characters inside JSON string values."""
+                import re
+                # Find all string values and escape newlines/tabs inside them
+                def escape_in_string(match):
+                    content = match.group(0)
+                    # Escape actual newlines and tabs (not already escaped)
+                    content = content.replace('\n', '\\n')
+                    content = content.replace('\r', '\\r')
+                    content = content.replace('\t', '\\t')
+                    return content
+                # Match JSON string values (between quotes, handling escaped quotes)
+                return re.sub(r'"(?:[^"\\]|\\.)*"', escape_in_string, s, flags=re.DOTALL)
+
+            json_str = fix_json_control_chars(json_str)
             data = json.loads(json_str)
 
             # 新版字段解析

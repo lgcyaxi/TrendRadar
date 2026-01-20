@@ -7,11 +7,30 @@
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .cache_service import get_cache
 from .parser_service import ParserService
 from ..utils.errors import DataNotFoundError
+
+
+def _sanitize_for_json(obj: Any) -> Any:
+    """
+    递归清理对象，将不可 JSON 序列化的类型转换为可序列化类型
+
+    主要处理:
+    - re.Pattern -> 正则表达式字符串
+    """
+    if isinstance(obj, re.Pattern):
+        return obj.pattern
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_sanitize_for_json(item) for item in obj)
+    else:
+        return obj
 
 
 class DataService:
@@ -509,7 +528,7 @@ class DataService:
 
         if section == "all" or section == "keywords":
             keywords_config = {
-                "word_groups": word_groups,
+                "word_groups": _sanitize_for_json(word_groups),
                 "total_groups": len(word_groups)
             }
 
@@ -544,7 +563,7 @@ class DataService:
 
     def get_available_date_range(self) -> Tuple[Optional[datetime], Optional[datetime]]:
         """
-        扫描 output 目录，返回实际可用的日期范围
+        返回实际可用的日期范围（支持滚动窗口模式）
 
         Returns:
             (最早日期, 最新日期) 元组，如果没有数据则返回 (None, None)
@@ -554,24 +573,8 @@ class DataService:
             >>> earliest, latest = service.get_available_date_range()
             >>> print(f"可用日期范围：{earliest} 至 {latest}")
         """
-        output_dir = self.parser.project_root / "output"
-
-        if not output_dir.exists():
-            return (None, None)
-
-        available_dates = []
-
-        # 遍历日期文件夹
-        for date_folder in output_dir.iterdir():
-            if date_folder.is_dir() and not date_folder.name.startswith('.'):
-                folder_date = self._parse_date_folder_name(date_folder.name)
-                if folder_date:
-                    available_dates.append(folder_date)
-
-        if not available_dates:
-            return (None, None)
-
-        return (min(available_dates), max(available_dates))
+        # 使用 parser 的方法，支持滚动窗口模式
+        return self.parser.get_available_date_range(db_type="news")
 
     def _parse_date_folder_name(self, folder_name: str) -> Optional[datetime]:
         """
@@ -615,35 +618,33 @@ class DataService:
 
     def get_system_status(self) -> Dict:
         """
-        获取系统运行状态
+        获取系统运行状态（支持滚动窗口模式）
 
         Returns:
             系统状态字典
         """
-        # 获取数据统计
         output_dir = self.parser.project_root / "output"
 
         total_storage = 0
-        oldest_record = None
-        latest_record = None
-        total_news = 0
+        storage_mode = "unknown"
 
         if output_dir.exists():
-            # 遍历日期文件夹
-            for date_folder in output_dir.iterdir():
-                if date_folder.is_dir() and not date_folder.name.startswith('.'):
-                    # 解析日期（兼容中文和ISO格式）
-                    folder_date = self._parse_date_folder_name(date_folder.name)
-                    if folder_date:
-                        if oldest_record is None or folder_date < oldest_record:
-                            oldest_record = folder_date
-                        if latest_record is None or folder_date > latest_record:
-                            latest_record = folder_date
+            # 检测存储模式
+            if self.parser._is_rolling_window_mode("news"):
+                storage_mode = "rolling_window"
+            else:
+                storage_mode = "per_date"
 
-                    # 计算存储大小
-                    for item in date_folder.rglob("*"):
-                        if item.is_file():
-                            total_storage += item.stat().st_size
+            # 计算存储大小（遍历整个 output 目录）
+            for item in output_dir.rglob("*"):
+                if item.is_file():
+                    try:
+                        total_storage += item.stat().st_size
+                    except (OSError, IOError):
+                        pass
+
+        # 获取日期范围（使用 parser 方法，支持滚动窗口）
+        oldest_record, latest_record = self.parser.get_available_date_range(db_type="news")
 
         # 读取版本信息
         version_file = self.parser.project_root / "version"
@@ -661,6 +662,7 @@ class DataService:
                 "project_root": str(self.parser.project_root)
             },
             "data": {
+                "storage_mode": storage_mode,
                 "total_storage": f"{total_storage / 1024 / 1024:.2f} MB",
                 "oldest_record": oldest_record.strftime("%Y-%m-%d") if oldest_record else None,
                 "latest_record": latest_record.strftime("%Y-%m-%d") if latest_record else None,

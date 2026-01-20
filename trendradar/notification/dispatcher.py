@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from trendradar.core.config import (
@@ -215,7 +216,8 @@ class NotificationDispatcher:
             )
 
         # 企业微信
-        if self.config.get("WEWORK_WEBHOOK_URL"):
+        mock_mode = self.config.get("NOTIFICATION_MOCK_MODE", False)
+        if self.config.get("WEWORK_WEBHOOK_URL") or mock_mode:
             results["wework"] = self._send_wework(
                 report_data, report_type, update_info, proxy_url, mode, rss_items, rss_new_items,
                 ai_analysis, display_regions, standalone_data
@@ -399,6 +401,37 @@ class NotificationDispatcher:
         display_regions = display_regions or {}
         if not display_regions.get("HOTLIST", True):
             report_data = {"stats": [], "failed_ids": [], "new_titles": [], "id_to_name": {}}
+
+        # Try extension-based send first (handles wework_compact, mock mode, etc.)
+        try:
+            from extensions import get_extension_manager
+            from dataclasses import dataclass
+
+            @dataclass
+            class NotificationContext:
+                config: Dict
+                report_data: Dict
+                ai_analysis: Optional[Any] = None
+                standalone_data: Optional[Dict] = None
+
+            ext_manager = get_extension_manager()
+            context = NotificationContext(
+                config=self.config,
+                report_data=report_data,
+                ai_analysis=ai_analysis,
+                standalone_data=standalone_data if display_regions.get("STANDALONE", False) else None,
+            )
+            result = ext_manager.apply_notification_send("wework", context)
+            if result is not None:
+                return result
+        except Exception as e:
+            print(f"[通知扩展] wework send 失败: {e}")
+
+        # Mock mode with no extension handling
+        mock_mode = self.config.get("NOTIFICATION_MOCK_MODE", False)
+        if mock_mode:
+            print("[企业微信] Mock 模式：无扩展处理，跳过原始发送")
+            return True
 
         return self._send_to_multi_accounts(
             channel_name="企业微信",

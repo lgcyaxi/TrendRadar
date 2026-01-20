@@ -50,11 +50,18 @@ RUN set -ex && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY docker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY docker/manage.py .
+COPY version .
 COPY trendradar/ ./trendradar/
+COPY extensions/ ./extensions/
+COPY scripts/ ./scripts/
+
+# Copy pyproject.toml and install package to register entry points for plugins
+COPY pyproject.toml .
+RUN pip install --no-cache-dir --no-deps .
 
 # 复制 entrypoint.sh 并强制转换为 LF 格式
 COPY docker/entrypoint.sh /entrypoint.sh.tmp
@@ -68,4 +75,20 @@ ENV PYTHONUNBUFFERED=1 \
     CONFIG_PATH=/app/config/config.yaml \
     FREQUENCY_WORDS_PATH=/app/config/frequency_words.txt
 
+# Default environment variables bundled in the image
+# These can be overridden in Container Manager GUI
+ENV TZ=America/Phoenix
+ENV CRON_SCHEDULE=*/30\ *\ *\ *\ *
+ENV RUN_MODE=cron
+ENV IMMEDIATE_RUN=true
+ENV ENABLE_WEBSERVER=true
+ENV WEBSERVER_PORT=8080
+
+# Note: Sensitive variables (webhooks, tokens, passwords) are NOT included
+# Configure them in Container Manager GUI when creating the container
+
+# Expose web server port for Synology Container Manager/WebStation recognition
+EXPOSE 8080
+
 ENTRYPOINT ["/entrypoint.sh"]
+CMD []

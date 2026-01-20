@@ -250,3 +250,130 @@
 
 # 产业政策
 生产力
+
+
+# ═══════════════════════════════════════════════════════════════
+#                         法律与合规 Legal & Compliance
+# ═══════════════════════════════════════════════════════════════
+
+# --- 合同 Contract ---
+[合同 Contract]
+/合同纠纷|违约|合同诈骗|阴阳合同|霸王条款/i => 合同
+/contract dispute|breach of contract|contractual liability/i => Contract
+格式条款
+
+# --- 侵权 Tort ---
+[侵权 Tort]
+/侵权|人身损害|名誉权|肖像权|隐私权|诽谤|造谣/i => 侵权
+/\btort\b|negligence|defamation|libel|slander|personal injury/i => Tort
+/知识产权|专利侵权|商标侵权|著作权|版权|盗版/i => 知识产权
+/intellectual property|\bIP\b infring|patent|trademark|copyright|piracy/i => IP
+抄袭
+plagiarism
+
+# --- 婚姻家庭 Family ---
+[婚姻家庭 Family Law]
+/离婚|抚养权|家暴|彩礼|冷静期/i => 婚姻家庭
+/divorce|custody|domestic violence|child support|alimony/i => Family Law
+/遗产|继承|遗嘱/i => 继承
+/inheritance|estate|probate|\bwill\b/i => Inheritance
+
+# --- 劳动 Employment & Labor ---
+[劳动 Employment]
+/劳动仲裁|劳动纠纷|欠薪|讨薪|拖欠工资/i => 劳动纠纷
+/labor dispute|wage theft|unpaid wages|labor arbitration/i => Labor Dispute
+/解雇|裁员|开除|辞退|n\+1/i => 解雇裁员
+/layoff|termination|wrongful dismissal|severance|fired/i => Layoff
+/996|加班|过劳|猝死/i => 劳动权益
+/overtime|overwork|burnout|work-life balance/i => Overwork
+/竞业|竞业协议|竞业限制/i => 竞业限制
+/non-compete|non-competition|restrictive covenant/i => Non-Compete
+/社保|公积金|五险一金/i => 社保
+/social security|pension|employee benefits/i => Benefits
+
+# --- 消费者权益 Consumer Protection ---
+[消费者权益 Consumer Protection]
+/消费者权益|315|维权|退款|假货|欺诈/i => 消费者权益
+/consumer protection|consumer rights|refund|counterfeit|fraud/i => Consumer Rights
+/虚假宣传|夸大宣传|虚假广告/i => 虚假宣传
+/false advertising|misleading|deceptive marketing/i => False Advertising
+/食品安全|食品卫生|过期食品/i => 食品安全
+/food safety|food contamination|FDA recall/i => Food Safety
+/价格欺诈|大数据杀熟|算法歧视/i => 价格歧视
+/price discrimination|algorithmic bias|dynamic pricing/i => Price Discrimination
+
+# --- 平台规则 Platform Rules & Governance ---
+[平台治理 Platform Governance]
+/平台治理|平台规则|封禁|封号|下架|限流/i => 平台治理
+/platform governance|content moderation|deplatform|ban|takedown/i => Platform Rules
+/内容审核|审核|敏感词/i => 内容审核
+/content review|censorship|moderation policy/i => Content Moderation
+/算法推荐|算法治理|信息茧房/i => 算法治理
+/algorithm|recommendation system|filter bubble|echo chamber/i => Algorithm
+/平台垄断|二选一|自我优待/i => 平台垄断
+/platform monopoly|self-preferencing|gatekeeper/i => Platform Monopoly
+
+# --- 行政监管 Administrative Regulation ---
+[行政监管 Regulatory]
+/市场监管|监管|约谈|整改|罚款|处罚/i => 行政监管
+/regulatory|regulator|fine|penalty|enforcement action/i => Regulatory
+/反垄断|垄断|滥用市场支配地位/i => 反垄断
+/antitrust|anti-monopoly|competition law|market dominance/i => Antitrust
+/反不正当竞争|不正当竞争/i => 不正当竞争
+/unfair competition|anti-competitive/i => Unfair Competition
+/网信办|工信部|市监局|发改委/i => 监管部门
+/\bFTC\b|\bSEC\b|\bDOJ\b|\bFDA\b|regulator/i => Regulators
+/合规|整顿|专项治理/i => 合规整顿
+/compliance|crackdown|enforcement campaign/i => Compliance
+
+# --- 国际执法 International Enforcement ---
+[国际执法 International Enforcement]
+/跨境执法|国际执法|引渡|司法协助/i => 国际执法
+/cross-border enforcement|extradition|mutual legal assistance|\bMLAT\b/i => Intl Enforcement
+/国际仲裁|WTO|争端解决/i => 国际仲裁
+/international arbitration|\bWTO\b|dispute resolution|\bICSID\b/i => Intl Arbitration
+/\bFBI\b|\bDOJ\b|美国司法部/i => 美国执法
+/interpol|foreign corrupt practices|\bFCPA\b/i => FCPA
+
+# --- 制裁 Sanctions & Export Controls ---
+[制裁 Sanctions]
+/制裁|实体清单|黑名单|出口管制/i => 制裁
+/sanction|entity list|blacklist|export control/i => Sanctions
+/\bEAR\b|出口管理条例|\bBIS\b/i => 美国出口管制
+/export administration|commerce department|denied parties/i => Export Control
+/芯片禁令|技术封锁|脱钩/i => 技术制裁
+/chip ban|tech restriction|decoupling/i => Tech Sanctions
+/\bCFIUS\b|外资审查|国家安全审查/i => 外资审查
+/foreign investment review|national security review|\bFIRRMA\b/i => Investment Review
+/\bOFAC\b|treasury|SDN list/i => OFAC
+
+# --- 出海合规 Outbound Compliance ---
+[出海合规 Outbound Compliance]
+/出海|跨境|全球化/i => 出海
+/going global|overseas expansion|globalization/i => Going Global
+/\bGDPR\b|数据保护|隐私合规/i => 数据合规
+/data protection|privacy compliance|\bCCPA\b|\bDSA\b|\bDMA\b/i => Data Privacy
+/本地化|数据本地化|数据跨境/i => 数据跨境
+/data localization|cross-border data|data transfer/i => Data Transfer
+/海外合规|境外投资|对外投资/i => 海外投资
+/outbound investment|overseas compliance|foreign subsidiary/i => Outbound Investment
+
+# --- 域外管辖 Extraterritorial Jurisdiction ---
+[域外管辖 Extraterritorial]
+/长臂管辖|域外管辖|域外适用|治外法权/i => 域外管辖
+/extraterritorial|long-arm jurisdiction|overseas application/i => Extraterritorial
+/次级制裁|二级制裁/i => 次级制裁
+/secondary sanction|indirect sanction/i => Secondary Sanctions
+/阻断法|反制裁|不可靠实体清单/i => 中国反制
+/blocking statute|anti-sanction|unreliable entity/i => Counter-Sanctions
+
+# --- 综合法律 General Legal ---
+[法律热点 Legal News]
+/立法|修法|法律草案|征求意见/i => 立法动态
+/legislation|bill|proposed law|public comment/i => Legislation
+/最高法|最高检|司法解释/i => 司法解释
+/supreme court|judicial interpretation|landmark ruling/i => Court Rulings
+/典型案例|指导案例|判例/i => 典型案例
+/landmark case|precedent|case law/i => Case Law
+/公益诉讼|集体诉讼/i => 集体诉讼
+/class action|public interest litigation|mass tort/i => Class Action

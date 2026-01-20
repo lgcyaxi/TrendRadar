@@ -58,6 +58,7 @@ def _load_app_config(config_data: Dict) -> Dict:
         "SHOW_VERSION_UPDATE": app_config.get("show_version_update", True),
         "TIMEZONE": _get_env_str("TIMEZONE") or app_config.get("timezone", "Asia/Shanghai"),
         "DEBUG": _get_env_bool("DEBUG") if _get_env_bool("DEBUG") is not None else advanced.get("debug", False),
+        "NOTIFICATION_MOCK_MODE": advanced.get("notification_mock_mode", False),  # Mock mode for testing
     }
 
 
@@ -276,10 +277,12 @@ def _load_storage_config(config_data: Dict) -> Dict:
     local = storage.get("local", {})
     remote = storage.get("remote", {})
     pull = storage.get("pull", {})
+    rolling_window = storage.get("rolling_window", {})
 
     txt_enabled_env = _get_env_bool("STORAGE_TXT_ENABLED")
     html_enabled_env = _get_env_bool("STORAGE_HTML_ENABLED")
     pull_enabled_env = _get_env_bool("PULL_ENABLED")
+    rolling_window_enabled_env = _get_env_bool("ROLLING_WINDOW_ENABLED")
 
     return {
         "BACKEND": _get_env_str("STORAGE_BACKEND") or storage.get("backend", "auto"),
@@ -303,6 +306,12 @@ def _load_storage_config(config_data: Dict) -> Dict:
         "PULL": {
             "ENABLED": pull_enabled_env if pull_enabled_env is not None else pull.get("enabled", False),
             "DAYS": _get_env_int("PULL_DAYS") or pull.get("days", 7),
+        },
+        "ROLLING_WINDOW": {
+            "ENABLED": rolling_window_enabled_env if rolling_window_enabled_env is not None else rolling_window.get("enabled", False),
+            "HOT_DAYS": _get_env_int("ROLLING_WINDOW_HOT_DAYS") or rolling_window.get("hot_days", 7),
+            "ARCHIVE_RETENTION_DAYS": _get_env_int("ROLLING_WINDOW_ARCHIVE_DAYS") or rolling_window.get("archive_retention_days", 90),
+            "AUTO_MAINTENANCE": rolling_window.get("auto_maintenance", True),
         },
     }
 
@@ -432,6 +441,8 @@ def _print_notification_sources(config: Dict) -> None:
     if notification_sources:
         print(f"通知渠道配置来源: {', '.join(notification_sources)}")
         print(f"每个渠道最大账号数: {max_accounts}")
+    elif config.get("NOTIFICATION_MOCK_MODE", False):
+        print("通知 Mock 模式已启用（无需配置通知渠道）")
     else:
         print("未配置任何通知渠道")
 
