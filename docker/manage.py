@@ -9,12 +9,49 @@ import sys
 import subprocess
 import time
 import signal
+import socket
 from pathlib import Path
 
 # Web 服务器配置
 WEBSERVER_PORT = int(os.environ.get("WEBSERVER_PORT", "8080"))
 WEBSERVER_DIR = "/app/output"
 WEBSERVER_PID_FILE = "/tmp/webserver.pid"
+WEBSERVER_LOG_FILE = "/tmp/webserver.log"
+
+
+def is_http_server_process(pid: int) -> bool:
+    """
+    Verify if a PID is actually a Python http.server process.
+    Returns True only if the process is running AND is http.server.
+    """
+    try:
+        # Check if process exists
+        os.kill(pid, 0)
+    except OSError:
+        return False
+
+    # Verify it's actually http.server by checking cmdline
+    try:
+        cmdline_path = Path(f"/proc/{pid}/cmdline")
+        if cmdline_path.exists():
+            cmdline = cmdline_path.read_text().replace('\x00', ' ').lower()
+            # Check if it's our http.server process
+            if 'http.server' in cmdline and str(WEBSERVER_PORT) in cmdline:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def is_port_in_use(port: int) -> bool:
+    """Check if a port is in use by trying to connect to it."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            result = s.connect_ex(('127.0.0.1', port))
+            return result == 0
+    except Exception:
+        return False
 
 
 def run_command(cmd, shell=True, capture_output=True):
@@ -452,19 +489,21 @@ def start_webserver():
     print(f"🌐 启动 Web 服务器 (端口: {WEBSERVER_PORT})...")
     print(f"  🔒 安全提示：仅提供静态文件访问，限制在 {WEBSERVER_DIR} 目录")
 
-    # 检查是否已经运行
+    # 检查是否已经运行 - 使用更严格的验证
     if Path(WEBSERVER_PID_FILE).exists():
         try:
             with open(WEBSERVER_PID_FILE, 'r') as f:
                 old_pid = int(f.read().strip())
-            try:
-                os.kill(old_pid, 0)  # 检查进程是否存在
-                print(f"  ⚠️ Web 服务器已在运行 (PID: {old_pid})")
+
+            # Use strict verification: check if it's actually http.server, not just any process
+            if is_http_server_process(old_pid):
+                print(f"  ✅ Web 服务器已在运行 (PID: {old_pid})")
                 print(f"  💡 访问: http://localhost:{WEBSERVER_PORT}")
                 print("  💡 停止服务: python manage.py stop_webserver")
                 return
-            except OSError:
-                # 进程不存在，删除旧的 PID 文件
+            else:
+                # PID exists but it's not http.server - stale PID file
+                print(f"  ⚠️ 检测到陈旧的 PID 文件 (PID: {old_pid} 不是 http.server)，清理中...")
                 os.remove(WEBSERVER_PID_FILE)
         except Exception as e:
             print(f"  ⚠️ 清理旧的 PID 文件: {e}")
@@ -472,6 +511,13 @@ def start_webserver():
                 os.remove(WEBSERVER_PID_FILE)
             except:
                 pass
+
+    # 检查端口是否已被占用
+    if is_port_in_use(WEBSERVER_PORT):
+        print(f"  ⚠️ 端口 {WEBSERVER_PORT} 已被占用，尝试查找占用进程...")
+        # Port is in use but we don't have a valid PID file - something else is using the port
+        print(f"  ❌ 端口 {WEBSERVER_PORT} 被其他进程占用，请检查")
+        return
 
     # 检查目录是否存在
     if not Path(WEBSERVER_DIR).exists():
@@ -482,15 +528,20 @@ def start_webserver():
         # 启动 HTTP 服务器
         # 使用 --bind 绑定到 0.0.0.0 使容器内部可访问
         # 工作目录限制在 WEBSERVER_DIR，防止访问其他目录
+        # 将 stderr 重定向到日志文件以便调试
+        log_file = open(WEBSERVER_LOG_FILE, 'a')
+        log_file.write(f"\n--- Webserver start at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+        log_file.flush()
+
         process = subprocess.Popen(
             [sys.executable, '-m', 'http.server', str(WEBSERVER_PORT), '--bind', '0.0.0.0'],
             cwd=WEBSERVER_DIR,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
             start_new_session=True
         )
 
-        # 等待一下确保服务器启动
+        # 等待并验证服务器启动
         time.sleep(1)
 
         # 检查进程是否还在运行
@@ -499,13 +550,37 @@ def start_webserver():
             with open(WEBSERVER_PID_FILE, 'w') as f:
                 f.write(str(process.pid))
 
-            print(f"  ✅ Web 服务器已启动 (PID: {process.pid})")
-            print(f"  📁 服务目录: {WEBSERVER_DIR} (只读，仅静态文件)")
-            print(f"  🌐 访问地址: http://localhost:{WEBSERVER_PORT}")
-            print(f"  📄 首页: http://localhost:{WEBSERVER_PORT}/index.html")
-            print("  💡 停止服务: python manage.py stop_webserver")
+            # 验证服务器实际在响应 - 最多重试 3 次
+            server_responding = False
+            for attempt in range(3):
+                if is_port_in_use(WEBSERVER_PORT):
+                    server_responding = True
+                    break
+                time.sleep(0.5)
+
+            if server_responding:
+                print(f"  ✅ Web 服务器已启动 (PID: {process.pid})")
+                print(f"  📁 服务目录: {WEBSERVER_DIR} (只读，仅静态文件)")
+                print(f"  🌐 访问地址: http://localhost:{WEBSERVER_PORT}")
+                print(f"  📄 首页: http://localhost:{WEBSERVER_PORT}/index.html")
+                print(f"  📋 日志文件: {WEBSERVER_LOG_FILE}")
+                print("  💡 停止服务: python manage.py stop_webserver")
+            else:
+                print(f"  ⚠️ 进程已启动 (PID: {process.pid}) 但端口未响应")
+                print(f"  📋 请检查日志: cat {WEBSERVER_LOG_FILE}")
         else:
+            # 进程启动失败，读取日志
             print(f"  ❌ Web 服务器启动失败")
+            try:
+                if Path(WEBSERVER_LOG_FILE).exists():
+                    with open(WEBSERVER_LOG_FILE, 'r') as f:
+                        lines = f.readlines()[-10:]  # Last 10 lines
+                        if lines:
+                            print(f"  📋 最近日志:")
+                            for line in lines:
+                                print(f"      {line.rstrip()}")
+            except Exception:
+                pass
     except Exception as e:
         print(f"  ❌ 启动失败: {e}")
 
@@ -556,25 +631,40 @@ def webserver_status():
     """查看 Web 服务器状态"""
     print("🌐 Web 服务器状态:")
 
+    # Check port first - most reliable indicator
+    port_in_use = is_port_in_use(WEBSERVER_PORT)
+
     if not Path(WEBSERVER_PID_FILE).exists():
-        print("  ⭕ 未运行")
-        print(f"  💡 启动服务: python manage.py start_webserver")
+        if port_in_use:
+            print(f"  ⚠️ 端口 {WEBSERVER_PORT} 被占用但无 PID 文件")
+            print("  💡 可能有其他进程占用此端口")
+        else:
+            print("  ⭕ 未运行")
+            print(f"  💡 启动服务: python manage.py start_webserver")
         return
 
     try:
         with open(WEBSERVER_PID_FILE, 'r') as f:
             pid = int(f.read().strip())
 
-        try:
-            os.kill(pid, 0)  # 检查进程是否存在
+        # Use strict verification - check if it's actually http.server
+        if is_http_server_process(pid):
             print(f"  ✅ 运行中 (PID: {pid})")
             print(f"  📁 服务目录: {WEBSERVER_DIR}")
             print(f"  🌐 访问地址: http://localhost:{WEBSERVER_PORT}")
             print(f"  📄 首页: http://localhost:{WEBSERVER_PORT}/index.html")
+            if Path(WEBSERVER_LOG_FILE).exists():
+                print(f"  📋 日志文件: {WEBSERVER_LOG_FILE}")
             print("  💡 停止服务: python manage.py stop_webserver")
-        except OSError:
-            print(f"  ⭕ 未运行 (PID 文件存在但进程不存在)")
+
+            # Additional health check
+            if not port_in_use:
+                print("  ⚠️ 警告: 进程存在但端口未响应，可能存在问题")
+        else:
+            # PID file exists but process is not http.server
+            print(f"  ⭕ 未运行 (PID 文件存在但 PID {pid} 不是 http.server)")
             os.remove(WEBSERVER_PID_FILE)
+            print("  🧹 已清理陈旧的 PID 文件")
             print("  💡 启动服务: python manage.py start_webserver")
     except Exception as e:
         print(f"  ❌ 状态检查失败: {e}")
