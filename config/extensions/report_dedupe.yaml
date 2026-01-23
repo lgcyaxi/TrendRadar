@@ -25,6 +25,12 @@ similarity:
   # 值越高，要求越相似才合并 / Higher value = stricter matching
   threshold: 0.85
 
+  # 候选过滤下限乘数 / Candidate floor multiplier (0.0 - 1.0)
+  # Jaccard 低于此值时不使用 AI 判断 / Skip AI check if Jaccard below this floor
+  # 公式 / Formula: max(0.2, threshold * multiplier)
+  # 较低的值让更多内容进入 AI 判断，适合中文新闻同义表达 / Lower for Chinese news with synonyms
+  candidate_floor_multiplier: 0.35
+
   # 最大 AI 检查次数 / Maximum AI check count
   # AI 判断用于相似度接近阈值的场景 / AI used for borderline cases
   max_ai_checks: 50
@@ -34,10 +40,8 @@ similarity:
 # 3. Ollama 配置 / Ollama Configuration
 # ═══════════════════════════════════════════════════════════════
 ollama:
-  # Ollama 服务器地址 / Ollama server URL
-  base_url: "http://localhost:11434"
-
   # 使用的模型 / Model name
+  # 通过主 AI 的 LiteLLM 连接 Ollama，base_url 由主 AI 配置决定
   model: "qwen2.5:14b-instruct"
 
 
@@ -61,3 +65,20 @@ merge:
 # 提示词文件相对路径，支持变量替换，包含 [system] 和 [user] 两个部分
 # Prompt file path relative to project root, supports variable substitution with [system] and [user] sections
 prompt_file: "config/dedupe_prompt.txt"
+
+
+# ═══════════════════════════════════════════════════════════════
+# 5. 显示配置 / Display Configuration
+# ═══════════════════════════════════════════════════════════════
+display:
+  # 是否显示多平台链接 / Show multi-platform links
+  # 在合并后的新闻标题下方显示各平台的原始链接
+  show_multi_platform_links: true
+
+  # 最大显示链接数 / Maximum links to display
+  # 超过此数量的链接将被显示为 "+N更多"
+  max_links: 5
+
+  # 高亮主链接 / Highlight primary link
+  # 是否对主链接（标题链接）使用特殊样式
+  highlight_primary: true

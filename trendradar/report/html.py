@@ -270,6 +270,10 @@ def render_html_content(
                 color: #666;
                 font-size: 12px;
                 font-weight: 500;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
             }
 
             .keyword-tag {
@@ -847,8 +851,25 @@ def render_html_content(
 
                 # 根据 display_mode 决定显示来源还是关键词
                 if display_mode == "keyword":
-                    # keyword 模式：显示来源
-                    stats_html += f'<span class="source-name">{html_escape(title_data["source_name"])}</span>'
+                    # keyword 模式：显示来源（带链接）
+                    urls = title_data.get("urls", [])
+                    if urls:
+                        # 构建带链接的来源名称（至少1个URL）
+                        source_links = []
+                        for url_info in urls[:5]:
+                            url = url_info.get("url", "")
+                            source = url_info.get("source", "")
+                            if url and source:
+                                escaped_url = html_escape(url)
+                                escaped_source = html_escape(source)
+                                source_links.append(f'<a href="{escaped_url}" target="_blank" class="platform-link">{escaped_source}</a>')
+                        if source_links:
+                            stats_html += '<span class="source-name">' + " / ".join(source_links) + '</span>'
+                        else:
+                            stats_html += f'<span class="source-name">{html_escape(title_data["source_name"])}</span>'
+                    else:
+                        # 无URL时普通显示
+                        stats_html += f'<span class="source-name">{html_escape(title_data["source_name"])}</span>'
                 else:
                     # platform 模式：显示关键词
                     matched_keyword = title_data.get("matched_keyword", "")

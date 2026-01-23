@@ -7,7 +7,7 @@ Provides the abstract base class and result dataclass for all section handlers.
 
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 

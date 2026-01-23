@@ -479,8 +479,8 @@ class TestNewTitlesHandler:
         assert "AI 深度分析" not in result.content
         assert "核心趋势内容" not in result.content
 
-    def test_fallback_format_without_ai(self, basic_config, sample_report_data):
-        """Test fallback format when AI is disabled."""
+    def test_simple_format_without_ai(self, basic_config, sample_report_data):
+        """Test simple format when AI is disabled."""
         handler = NewTitlesHandler(basic_config["sections"]["new_titles"])
         context = MockContext(
             config={"AI_ANALYSIS": {"ENABLED": False}},
@@ -489,7 +489,7 @@ class TestNewTitlesHandler:
 
         result = handler.process(context, context.config)
 
-        # Should use fallback format (no AI summary, just count)
+        # Should use simple format (no AI summary, just count)
         assert "本日新增: 共发现" in result.content
         assert "条新热点" in result.content
 

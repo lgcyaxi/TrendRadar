@@ -46,8 +46,15 @@ def prepare_report_data(
 
     # 只有在非隐藏模式下才处理新增新闻部分
     if not hide_new_section:
-        filtered_new_titles = {}
-        if new_titles and id_to_name:
+        # Check if new_titles is already in processed list format (from deduplication)
+        # List format: [{"source_id": ..., "source_name": ..., "titles": [...]}]
+        # Dict format: {source_id: {title: title_data}}
+        if isinstance(new_titles, list):
+            # Already in processed format, use directly (skip filtering since already done)
+            processed_new_titles = new_titles
+        elif new_titles and id_to_name:
+            # Original dict format - process as before
+            filtered_new_titles = {}
             # 如果提供了匹配函数，使用它过滤
             if matches_word_groups_func and load_frequency_words_func:
                 word_groups, filter_words, global_filters = load_frequency_words_func()
@@ -68,37 +75,37 @@ def prepare_report_data(
             if original_new_count > 0:
                 print(f"频率词过滤后：{filtered_new_count} 条新增热点匹配（原始 {original_new_count} 条）")
 
-        if filtered_new_titles and id_to_name:
-            for source_id, titles_data in filtered_new_titles.items():
-                source_name = id_to_name.get(source_id, source_id)
-                source_titles = []
+            if filtered_new_titles and id_to_name:
+                for source_id, titles_data in filtered_new_titles.items():
+                    source_name = id_to_name.get(source_id, source_id)
+                    source_titles = []
 
-                for title, title_data in titles_data.items():
-                    url = title_data.get("url", "")
-                    mobile_url = title_data.get("mobileUrl", "")
-                    ranks = title_data.get("ranks", [])
+                    for title, title_data in titles_data.items():
+                        url = title_data.get("url", "")
+                        mobile_url = title_data.get("mobileUrl", "")
+                        ranks = title_data.get("ranks", [])
 
-                    processed_title = {
-                        "title": title,
-                        "source_name": source_name,
-                        "time_display": "",
-                        "count": 1,
-                        "ranks": ranks,
-                        "rank_threshold": rank_threshold,
-                        "url": url,
-                        "mobile_url": mobile_url,
-                        "is_new": True,
-                    }
-                    source_titles.append(processed_title)
-
-                if source_titles:
-                    processed_new_titles.append(
-                        {
-                            "source_id": source_id,
+                        processed_title = {
+                            "title": title,
                             "source_name": source_name,
-                            "titles": source_titles,
+                            "time_display": "",
+                            "count": 1,
+                            "ranks": ranks,
+                            "rank_threshold": rank_threshold,
+                            "url": url,
+                            "mobile_url": mobile_url,
+                            "is_new": True,
                         }
-                    )
+                        source_titles.append(processed_title)
+
+                    if source_titles:
+                        processed_new_titles.append(
+                            {
+                                "source_id": source_id,
+                                "source_name": source_name,
+                                "titles": source_titles,
+                            }
+                        )
 
     processed_stats = []
     for stat in stats:
@@ -115,9 +122,12 @@ def prepare_report_data(
                 "ranks": title_data["ranks"],
                 "rank_threshold": title_data["rank_threshold"],
                 "url": title_data.get("url", ""),
-                "mobile_url": title_data.get("mobileUrl", ""),
+                "mobile_url": title_data.get("mobile_url", ""),
                 "is_new": title_data.get("is_new", False),
             }
+            # Preserve all platform-specific URLs from deduplication
+            if "urls" in title_data:
+                processed_title["urls"] = title_data["urls"]
             processed_titles.append(processed_title)
 
         processed_stats.append(
@@ -154,6 +164,9 @@ def generate_html_report(
     render_html_func: Optional[Callable] = None,
     matches_word_groups_func: Optional[Callable] = None,
     load_frequency_words_func: Optional[Callable] = None,
+    extension_manager=None,
+    extension_config: Optional[Dict] = None,
+    extension_context=None,
 ) -> str:
     """
     生成 HTML 报告
@@ -178,6 +191,9 @@ def generate_html_report(
         render_html_func: HTML 渲染函数
         matches_word_groups_func: 词组匹配函数
         load_frequency_words_func: 加载频率词函数
+        extension_manager: 扩展管理器实例（用于应用 HTMLRenderHook）
+        extension_config: 扩展配置字典
+        extension_context: 扩展上下文
 
     Returns:
         str: 生成的 HTML 文件路径（时间戳快照路径）
@@ -202,6 +218,13 @@ def generate_html_report(
         load_frequency_words_func,
     )
 
+    # 应用 HTMLRenderHook.before_render 扩展（如果有）
+    if extension_manager and extension_manager.plugins:
+        try:
+            report_data = extension_manager.apply_html_hooks(report_data, extension_context)
+        except Exception as e:
+            print(f"[Warning] Error applying HTML hooks: {e}")
+
     # 渲染 HTML 内容
     if render_html_func:
         html_content = render_html_func(
@@ -210,6 +233,13 @@ def generate_html_report(
     else:
         # 默认简单 HTML
         html_content = f"<html><body><h1>Report</h1><pre>{report_data}</pre></body></html>"
+
+    # 应用 HTMLRenderHook.after_render 扩展（如果有）
+    if extension_manager and extension_manager.plugins:
+        try:
+            html_content = extension_manager.apply_html_post_processing(html_content, extension_context)
+        except Exception as e:
+            print(f"[Warning] Error applying HTML post-processing: {e}")
 
     # 1. 保存时间戳快照（历史记录）
     with open(snapshot_file, "w", encoding="utf-8") as f:

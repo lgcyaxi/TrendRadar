@@ -361,7 +361,7 @@ ai:
                                     #    (原理：前缀 openai/ 强制 LiteLLM 使用 OpenAI 协议格式进行通信)
 
 
-  timeout: 120                      # 请求超时（秒）
+  timeout: 300                      # 请求超时（秒）- 增加到5分钟以适应长时间思考
 
   # AI 参数配置
   temperature: 1.0                  # 采样温度 (0.0-2.0)

@@ -21,11 +21,12 @@ sections:
     include_ai_summary: true     # Generate AI-powered cross-news summary
     max_titles: 20               # Maximum titles to display
     max_platform_display: 3      # Max platforms per title (e.g., "微博/抖音/知乎")
+    empty_message: "暂无新增今日热点"  # Message when no new hot topics
 
   # Current list section (当前榜单) - all current trending titles
   current_list:
     enabled: true
-    include_ai_analysis: true    # Append AI deep analysis at the end (updated per crawl)
+    include_ai_analysis: true    # Include AI deep analysis at the end
     max_titles: 50               # Maximum titles to display
     max_platform_display: 3      # Max platforms per title
 
@@ -35,38 +36,18 @@ sections:
     max_items_per_source: 10     # Maximum items per platform/feed
 
 # Order of sections in the output message
-# Sections not in this list but enabled will be appended at the end
 section_order:
   - new_titles
   - current_list
   - standalone
 
-# === Legacy Settings (for backward compatibility) ===
-# These are merged into section-specific configs
+# === Ollama Configuration ===
+# AI summary generation for new_titles section
+# 通过主 AI 的 LiteLLM 连接 Ollama，超时由主 AI 配置决定
+ollama:
+  model: "glm-4.7-flash:latest"              # Model name
+  prompt_file: "wework_compact_prompt.txt"   # Prompt file for AI summary
 
-# Compact summary settings (used by new_titles section)
-compact_summary:
-  summary_prefix: "今日热点总结:"      # Prefix for AI summary line
-  source_prefix: "来源:"              # Prefix for source list
-  fallback_prefix: "今日热点:"        # Prefix when no AI
-  separator: " / "                    # Separator between titles
-  max_titles: 20                      # Maximum number of titles to include
-  include_ai_analysis: true           # Include existing AI analysis section after summary
-
-# AI settings - REUSE from main config.yaml AI_ANALYSIS section
-# No separate AI config here - uses the same provider/model as AI_ANALYSIS
-ai:
-  use_main_config: true              # Use AI_ANALYSIS config from main config.yaml
-  prompt_file: "wework_compact_prompt.txt"  # Custom prompt for compact summary
-
-  # AI summary generation settings
-  ai_summary:
-    target_length: 250               # Target character count (200-300 recommended)
-    tone: "journalistic"             # Tone: journalistic, analytical, conversational
-    focus: "facts"                   # Focus: facts (what happened), analysis (why), trends (big picture), all
-    style: "concise"                 # Style: concise, detailed
-
-# Fallback behavior when AI is disabled or fails
+# === Fallback Settings ===
 fallback:
-  max_title_length: 25               # Truncate long titles
-  max_platform_display: 3            # Max platforms to show per title (e.g., "微博/抖音/知乎")
+  max_platform_display: 3  # Max platforms to show per title

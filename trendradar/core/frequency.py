@@ -107,7 +107,8 @@ def load_frequency_words(
     - @数字：该词组最多显示的条数
 
     Args:
-        frequency_file: 频率词配置文件路径，默认从环境变量 FREQUENCY_WORDS_PATH 获取或使用 config/frequency_words.txt
+        frequency_file: 频率词配置文件路径，默认从环境变量 FREQUENCY_WORDS_PATH 获取，
+                        或使用 CONFIG_DIR/frequency_words.txt，最后回退到 config/frequency_words.txt
 
     Returns:
         (词组列表, 词组内过滤词, 全局过滤词)
@@ -116,9 +117,11 @@ def load_frequency_words(
         FileNotFoundError: 频率词文件不存在
     """
     if frequency_file is None:
-        frequency_file = os.environ.get(
-            "FREQUENCY_WORDS_PATH", "config/frequency_words.txt"
-        )
+        # Priority: FREQUENCY_WORDS_PATH > CONFIG_DIR/frequency_words.txt > config/frequency_words.txt
+        frequency_file = os.environ.get("FREQUENCY_WORDS_PATH")
+        if not frequency_file:
+            config_dir = os.environ.get("CONFIG_DIR", "config")
+            frequency_file = str(Path(config_dir) / "frequency_words.txt")
 
     frequency_path = Path(frequency_file)
     if not frequency_path.exists():

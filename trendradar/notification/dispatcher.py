@@ -427,10 +427,10 @@ class NotificationDispatcher:
         except Exception as e:
             print(f"[通知扩展] wework send 失败: {e}")
 
-        # Mock mode with no extension handling
+        # Mock mode: already handled earlier in _send_notification_if_needed
         mock_mode = self.config.get("NOTIFICATION_MOCK_MODE", False)
         if mock_mode:
-            print("[企业微信] Mock 模式：无扩展处理，跳过原始发送")
+            print("[Mock 模式] 通知已在前置流程处理")
             return True
 
         return self._send_to_multi_accounts(

@@ -318,6 +318,10 @@ class AppContext:
         standalone_data: Optional[Dict] = None,
     ) -> str:
         """生成HTML报告"""
+        # Get extension manager for HTML hooks
+        from extensions import get_extension_manager
+        ext_manager = get_extension_manager()
+
         return generate_html_report(
             stats=stats,
             total_titles=total_titles,
@@ -333,6 +337,9 @@ class AppContext:
             render_html_func=lambda *args, **kwargs: self.render_html(*args, rss_items=rss_items, rss_new_items=rss_new_items, ai_analysis=ai_analysis, standalone_data=standalone_data, **kwargs),
             matches_word_groups_func=self.matches_word_groups,
             load_frequency_words_func=self.load_frequency_words,
+            extension_manager=ext_manager,
+            extension_config=None,
+            extension_context=self,
         )
 
     def render_html(

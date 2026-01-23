@@ -1,6 +1,6 @@
 [project]
 name = "trendradar"
-version = "5.3.0"
+version = "5.3.2"
 description = "TrendRadar - 热点新闻聚合与分析工具"
 requires-python = ">=3.10"
 dependencies = [
@@ -13,6 +13,7 @@ dependencies = [
     "boto3>=1.35.0,<2.0.0",
     "litellm>=1.57.0,<2.0.0",
     "loguru>=0.7.0,<1.0.0",
+    "tenacity>=8.0.0,<10.0.0",
 ]
 
 [project.scripts]
@@ -48,12 +49,18 @@ platforms = ["osx-arm64"]
 pyclean = ">=3.4.0,<4"
 loguru = ">=0.7.3,<0.8"
 pytest = ">=9.0.2,<10"
+pytz = ">=2025.2,<2026"
 
 [tool.pixi.activation.env]
 # Default environment variables when pixi environment is activated
 # These can be overridden when running specific tasks or manually
 CRAWLER_INTERVAL = "1800"  # Crawler loop interval in seconds (default: 30 minutes)
 RUN_MODE = "loop"          # Default run mode for crawler-server task
+
+# Private config directory (config_p/ is gitignored for sensitive data)
+# Set CONFIG_DIR to use a custom config directory instead of default 'config/'
+# All config files (config.yaml, frequency_words.txt, prompts, extensions) will be loaded from this directory
+CONFIG_DIR = "config_p"
 
 [tool.pixi.pypi-dependencies]
 trendradar = { path = ".", editable = true }
@@ -93,6 +100,9 @@ crawler-server = "RUN_MODE=loop python -m trendradar"
 
 # Run TrendRadar MCP server (continuous service)
 mcp = "python -c 'from mcp_server.server import run_server; run_server()'"
+
+# Run tests for wework-compact extension
+test-wework-compact = "python -m pytest tests/test_wework_compact.py -v"
 
 # 
 # Version Bump Tasks

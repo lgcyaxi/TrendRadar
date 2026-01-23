@@ -30,7 +30,9 @@ def _configure_logger():
     # If not set, try to read from config file
     if not log_level:
         try:
-            config_path = Path("config/config.yaml")
+            # Support CONFIG_DIR env var for custom config directory
+            config_dir = os.environ.get("CONFIG_DIR", "config")
+            config_path = Path(config_dir) / "config.yaml"
             if not config_path.exists():
                 config_path = Path("/app/config/config.yaml")
             if config_path.exists():
@@ -126,7 +128,8 @@ class ExtensionManager:
         """
         Load configuration for a specific plugin.
 
-        Config is loaded from: config/extensions/{plugin_name}.yaml
+        Config is loaded from: {CONFIG_DIR}/extensions/{plugin_name}.yaml
+        where CONFIG_DIR defaults to 'config' if not set.
 
         Args:
             plugin_name: Plugin name (should match plugin.name property)
@@ -134,7 +137,9 @@ class ExtensionManager:
         Returns:
             Configuration dictionary, or empty dict if not found
         """
-        config_path = Path(f"config/extensions/{plugin_name}.yaml")
+        # Support CONFIG_DIR env var for custom config directory
+        config_dir = os.environ.get("CONFIG_DIR", "config")
+        config_path = Path(config_dir) / "extensions" / f"{plugin_name}.yaml"
 
         if not config_path.exists():
             logger.debug(

@@ -4,10 +4,11 @@ All notable changes to this project are documented in separate version files.
 
 ## Version History
 
-| Version                       | Date       | Summary                                          |
-| ----------------------------- | ---------- | ------------------------------------------------ |
-| [5.2.x](./changelog/5.2.x.md) | 2026-01-17 | Storage fixes, HTML archiving, loop mode         |
-| [5.0.x](./changelog/5.0.x.md) | 2026-01-14 | Extension system, rolling window, notifications  |
+|| Version                       | Date       | Summary                                          |
+|| ----------------------------- | ---------- | ------------------------------------------------ |
+|| [5.3.x](./changelog/5.3.x.md) | 2026-01-20 | Cross-source deduplication, configurable floor   |
+|| [5.2.x](./changelog/5.2.x.md) | 2026-01-17 | Storage fixes, HTML archiving, loop mode         |
+|| [5.0.x](./changelog/5.0.x.md) | 2026-01-14 | Extension system, rolling window, notifications  |
 
 ## Version Format
 
@@ -34,13 +35,13 @@ Each version file (`X.Y.Z.md`) contains:
 
 ## Categories
 
-| Category | Description                       |
-| -------- | --------------------------------- |
-| Added    | New features                      |
-| Changed  | Changes in existing functionality |
-| Removed  | Removed features                  |
-| Fixed    | Bug fixes                         |
-| Security | Security-related changes          |
+|| Category | Description                       |
+|| -------- | --------------------------------- |
+|| Added    | New features                      |
+|| Changed  | Changes in existing functionality |
+|| Removed  | Removed features                  |
+|| Fixed    | Bug fixes                         |
+|| Security | Security-related changes          |
 
 ## References
 

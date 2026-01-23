@@ -49,3 +49,4 @@ index.html
 # Backup files
 .bak
 uv.lock
+/config_p

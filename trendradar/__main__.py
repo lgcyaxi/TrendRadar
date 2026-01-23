@@ -545,6 +545,15 @@ class NewsAnalyzer:
                 stats, rss_items, mode, report_type, id_to_name
             )
 
+        # 应用扩展转换（如报告去重）- 在 HTML 生成前应用以确保报告也去重
+        extension_manager = get_extension_manager()
+
+        report_data_for_html = self.ctx.prepare_report(stats, failed_ids, new_titles, id_to_name, mode)
+        report_data_for_html = extension_manager.apply_transforms(report_data_for_html, self.ctx)
+        # 从去重后的数据中提取 stats 和 new_titles
+        stats = report_data_for_html.get("stats", stats)
+        new_titles = report_data_for_html.get("new_titles", new_titles)
+
         # HTML生成（如果启用）
         html_file = None
         if self.ctx.config["STORAGE"]["FORMATS"]["HTML"]:
@@ -597,6 +606,19 @@ class NewsAnalyzer:
             and has_notification
             and has_any_content
         ):
+            # Mock mode: early intercept, bypass all checks and display content directly
+            mock_mode = cfg.get("NOTIFICATION_MOCK_MODE", False)
+            if mock_mode:
+                print(f"[Mock 模式] 拦截通知，直接显示内容")
+                # Display the mock content using wework_compact extension
+                from extensions.wework_compact import display_mock_notification
+                display_mock_notification(
+                    cfg, stats, report_type, mode, failed_ids, new_titles, id_to_name,
+                    rss_items, rss_new_items, standalone_data, ai_result,
+                    self.update_info if cfg.get("SHOW_VERSION_UPDATE") else None
+                )
+                return True
+
             # 输出推送内容统计
             content_parts = []
             if news_count > 0:
@@ -626,8 +648,9 @@ class NewsAnalyzer:
             # 注意：push 记录仍会正常执行，用于分析统计
             scheduler_matched = enabled_channels is not None and len(enabled_channels) > 0
 
-            # 推送窗口控制（仅当没有 ChannelFilter 匹配时生效）
-            if cfg["PUSH_WINDOW"]["ENABLED"] and not scheduler_matched:
+            # 推送窗口控制（仅当没有 ChannelFilter 匹配时生效，且 mock 模式下跳过）
+            mock_mode = cfg.get("NOTIFICATION_MOCK_MODE", False)
+            if cfg["PUSH_WINDOW"]["ENABLED"] and not scheduler_matched and not mock_mode:
                 push_manager = self.ctx.create_push_manager()
                 time_range_start = cfg["PUSH_WINDOW"]["TIME_RANGE"]["START"]
                 time_range_end = cfg["PUSH_WINDOW"]["TIME_RANGE"]["END"]
@@ -645,6 +668,8 @@ class NewsAnalyzer:
                         return False
                     else:
                         print(f"推送窗口控制：今天首次推送")
+            elif mock_mode:
+                print(f"[Mock 模式] 已跳过推送窗口检查")
             elif enabled_channels is not None:
                 # notification_scheduler 返回了结果（可能是空列表或非空列表）
                 if len(enabled_channels) > 0:

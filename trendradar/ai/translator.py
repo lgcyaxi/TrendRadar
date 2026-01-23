@@ -7,6 +7,7 @@ AI 翻译器模块
 """
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -60,7 +61,12 @@ class AITranslator:
 
     def _load_prompt_template(self, prompt_file: str) -> tuple:
         """加载提示词模板"""
-        config_dir = Path(__file__).parent.parent.parent / "config"
+        # Support CONFIG_DIR env var for custom config directory
+        config_dir_env = os.environ.get("CONFIG_DIR")
+        if config_dir_env:
+            config_dir = Path(config_dir_env)
+        else:
+            config_dir = Path(__file__).parent.parent.parent / "config"
         prompt_path = config_dir / prompt_file
 
         if not prompt_path.exists():

@@ -452,7 +452,8 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     加载配置文件
 
     Args:
-        config_path: 配置文件路径，默认从环境变量 CONFIG_PATH 获取或使用 config/config.yaml
+        config_path: 配置文件路径，默认从环境变量 CONFIG_PATH 获取，
+                     或使用 CONFIG_DIR/config.yaml，最后回退到 config/config.yaml
 
     Returns:
         包含所有配置的字典
@@ -461,7 +462,11 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
         FileNotFoundError: 配置文件不存在
     """
     if config_path is None:
-        config_path = os.environ.get("CONFIG_PATH", "config/config.yaml")
+        # Priority: CONFIG_PATH > CONFIG_DIR/config.yaml > config/config.yaml
+        config_path = os.environ.get("CONFIG_PATH")
+        if not config_path:
+            config_dir = os.environ.get("CONFIG_DIR", "config")
+            config_path = str(Path(config_dir) / "config.yaml")
 
     if not Path(config_path).exists():
         raise FileNotFoundError(f"配置文件 {config_path} 不存在")
